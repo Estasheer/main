@@ -7,168 +7,94 @@ workflows:
       vars:
         ANDROID_SDK_ROOT: "/Users/builder/programs/android-sdk"
     scripts:
-      - name: Create Android project structure
+      - name: Clean Workspace
         script: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          
-          # إنشاء هيكل مجلدات Android إذا كان مفقوداً
-          if [ ! -d "android" ]; then
-            echo "Creating Android project structure from scratch..."
-            
-            # إنشاء الهيكل الأساسي
-            mkdir -p android/app/src/{main,debug}/java/com/yourproject
-            mkdir -p android/app/src/main/res
-            mkdir -p android/gradle/wrapper
-            
-            # تنزيل ملفات Gradle الأساسية
-            curl -L https://raw.githubusercontent.com/gradle/gradle/master/gradlew -o android/gradlew
-            curl -L https://raw.githubusercontent.com/gradle/gradle/master/gradlew.bat -o android/gradlew.bat
-            
-            # إنشاء ملفات أساسية
-            echo "distributionBase=GRADLE_USER_HOME" > android/gradle/wrapper/gradle-wrapper.properties
-            echo "distributionPath=wrapper/dists" >> android/gradle/wrapper/gradle-wrapper.properties
-            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-7.5.1-bin.zip" >> android/gradle/wrapper/gradle-wrapper.properties
-            echo "zipStoreBase=GRADLE_USER_HOME" >> android/gradle/wrapper/gradle-wrapper.properties
-            echo "zipStorePath=wrapper/dists" >> android/gradle/wrapper/gradle-wrapper.properties
-            
-            # build.gradle (الملف الرئيسي)
-            echo "buildscript {" > android/build.gradle
-            echo "    ext {" >> android/build.gradle
-            echo "        buildToolsVersion = \"33.0.0\"" >> android/build.gradle
-            echo "        minSdkVersion = 21" >> android/build.gradle
-            echo "        compileSdkVersion = 33" >> android/build.gradle
-            echo "        targetSdkVersion = 33" >> android/build.gradle
-            echo "    }" >> android/build.gradle
-            echo "    repositories {" >> android/build.gradle
-            echo "        google()" >> android/build.gradle
-            echo "        mavenCentral()" >> android/build.gradle
-            echo "    }" >> android/build.gradle
-            echo "    dependencies {" >> android/build.gradle
-            echo "        classpath(\"com.android.tools.build:gradle:7.3.1\")" >> android/build.gradle
-            echo "    }" >> android/build.gradle
-            echo "}" >> android/build.gradle
-            
-            # settings.gradle
-            echo "rootProject.name = 'YourProject'" > android/settings.gradle
-            
-            # app/build.gradle
-            echo "apply plugin: \"com.android.application\"" > android/app/build.gradle
-            echo "android {" >> android/app/build.gradle
-            echo "    compileSdkVersion 33" >> android/app/build.gradle
-            echo "    defaultConfig {" >> android/app/build.gradle
-            echo "        applicationId \"com.yourproject\"" >> android/app/build.gradle
-            echo "        minSdkVersion 21" >> android/app/build.gradle
-            echo "        targetSdkVersion 33" >> android/app/build.gradle
-            echo "        versionCode 1" >> android/app/build.gradle
-            echo "        versionName \"1.0\"" >> android/app/build.gradle
-            echo "    }" >> android/app/build.gradle
-            echo "}" >> android/app/build.gradle
-            
-            # AndroidManifest.xml
-            echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>" > android/app/src/main/AndroidManifest.xml
-            echo "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">" >> android/app/src/main/AndroidManifest.xml
-            echo "    <application />" >> android/app/src/main/AndroidManifest.xml
-            echo "</manifest>" >> android/app/src/main/AndroidManifest.xml
-            
-            # منح صلاحيات التنفيذ
-            chmod +x android/gradlew
-            
-            echo "Basic Android project structure created!"
-          else
-            echo "Android folder exists. Continuing..."
-          fi
-          
-          # التحقق من محتويات مجلد android
-          echo "Android folder contents:"
-          ls -la android/
-
-      - name: Clean Android Build
-        script: |
+          rm -rf ~/.gradle/caches
           rm -rf android/.gradle
           rm -rf android/build
           rm -rf android/app/build
 
-      - name: Install Full Gradle
+      - name: Install Required Tools
         script: |
-          echo "=== Installing Full Gradle Distribution ==="
-          GRADLE_VERSION=7.5.1
-          curl -L https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -o gradle.zip
-          unzip -q gradle.zip -d /tmp
-          rm gradle.zip
-          export PATH=$PATH:/tmp/gradle-${GRADLE_VERSION}/bin
-          gradle -v
-
-      - name: Install Node.js
-        script: |
+          # تثبيت Java 17
+          brew install openjdk@17
+          sudo ln -sfn /usr/local/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
+          export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home
+          
           # تثبيت Node.js 18
           curl -o node-v18.20.2.pkg https://nodejs.org/dist/v18.20.2/node-v18.20.2.pkg
           sudo installer -pkg node-v18.20.2.pkg -target /
           export PATH="/usr/local/bin:$PATH"
-          node -v
-          npm -v
-
-      - name: Install project dependencies
-        script: |
-          # تثبيت الاعتماديات الأساسية إذا لزم الأمر
-          if [ ! -f "package.json" ]; then
-            echo "Creating basic package.json..."
-            echo '{' > package.json
-            echo '  "name": "telon-gsm-sip-gateway",' >> package.json
-            echo '  "version": "1.0.0",' >> package.json
-            echo '  "dependencies": {' >> package.json
-            echo '    "react": "18.2.0",' >> package.json
-            echo '    "react-native": "0.72.6"' >> package.json
-            echo '  }' >> package.json
-            echo '}' >> package.json
-          fi
           
+          # تثبيت Android Command Line Tools
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          curl -L https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip -o cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          rm cmdline-tools.zip
+          
+          # قبول التراخيص
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+          
+          # تثبيت Android SDK
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0" "platform-tools"
+
+      - name: Create Android Project
+        script: |
+          if [ ! -d "android" ]; then
+            echo "Creating Android project from template..."
+            
+            # إنشاء هيكل مشروع Android باستخدام npx
+            npx react-native init MyApp --template react-native-template-typescript
+            
+            # نسخ مجلد android من المشروع الجديد
+            cp -R MyApp/android .
+            rm -rf MyApp
+            
+            # تحديث ملفات التكوين
+            echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+            echo "include ':app'" > android/settings.gradle
+          fi
+
+      - name: Install Project Dependencies
+        script: |
           npm install --legacy-peer-deps
-
-      - name: Set Android SDK location
-        script: |
+          
+          # إعداد Android SDK
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-          echo "Local properties file content:"
-          cat android/local.properties
 
-      - name: Build Android debug APK
+      - name: Build Android APK
         script: |
-          echo "=== Building with Full Gradle ==="
           cd android
           
-          # استخدم المسار الكامل لـ Gradle
-          /tmp/gradle-7.5.1/bin/gradle clean assembleDebug --stacktrace --no-daemon
+          # استخدام Gradle مع إعدادات محددة
+          ./gradlew clean assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            -Dorg.gradle.java.home=$JAVA_HOME \
+            -Dorg.gradle.daemon=false \
+            -Dorg.gradle.parallel=true
           
           # التحقق من وجود APK
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            echo "APK built successfully!"
+            echo "APK built successfully! File size: $(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
           else
             echo "APK not found! Build may have failed."
-            echo "Build output:"
+            echo "Build output contents:"
             ls -la app/build/outputs/apk/debug/
             exit 1
           fi
 
-      - name: Locate and Upload APK
+      - name: Upload APK
         script: |
-          # البحث عن ملف APK
-          APK_PATH=$(find . -name "app-debug.apk" | head -1)
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
           
           if [ -f "$APK_PATH" ]; then
-            echo "APK found at: $APK_PATH"
-            echo "File size: $(du -h "$APK_PATH" | cut -f1)"
-            
-            # رفع الملف إلى filebin.io
-            echo "Uploading APK to filebin.io..."
-            FILENAME=$(basename "$APK_PATH")
-            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=${FILENAME}" | grep -o 'https://filebin.net/[^"]*')
-            
+            echo "Uploading APK to filebin.net..."
+            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=telon-gateway-app.apk" | grep -o 'https://filebin.net/[^"]*')
             echo "Download URL: $DOWNLOAD_URL"
           else
-            echo "APK not found! Build may have failed."
-            echo "Searching for any APK files:"
-            find . -name "*.apk" || echo "No APK files found"
+            echo "APK file not found for upload"
             exit 1
           fi
     artifacts:
