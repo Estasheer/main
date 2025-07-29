@@ -14,30 +14,30 @@ workflows:
           rm -rf android/build
           rm -rf android/app/build
 
-      - name: Install Required Tools
-        script: |
-          # تثبيت Java 17
-          brew install openjdk@17
-          sudo ln -sfn /usr/local/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
-          export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home
-          
-          # تثبيت Node.js 18
-          curl -o node-v18.20.2.pkg https://nodejs.org/dist/v18.20.2/node-v18.20.2.pkg
-          sudo installer -pkg node-v18.20.2.pkg -target /
-          export PATH="/usr/local/bin:$PATH"
-          
-          # تثبيت Android Command Line Tools
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          curl -L https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip -o cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          rm cmdline-tools.zip
-          
-          # قبول التراخيص
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-          
-          # تثبيت Android SDK
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0" "platform-tools"
+- name: Install Required Tools
+  script: |
+    # تثبيت Java 17 بطريقة موثوقة
+    brew install --cask adoptopenjdk/openjdk/adoptopenjdk17
+    export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+    echo "JAVA_HOME set to: $JAVA_HOME"
+    
+    # تثبيت Node.js 18
+    curl -o node-v18.20.2.pkg https://nodejs.org/dist/v18.20.2/node-v18.20.2.pkg
+    sudo installer -pkg node-v18.20.2.pkg -target /
+    export PATH="/usr/local/bin:$PATH"
+    
+    # تثبيت Android Command Line Tools
+    mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+    curl -L https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip -o cmdline-tools.zip
+    unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+    mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+    rm cmdline-tools.zip
+    
+    # قبول التراخيص (بدون yes)
+    echo -e "\n" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+    
+    # تثبيت Android SDK
+    $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0" "platform-tools"
 
       - name: Create Android Project
         script: |
