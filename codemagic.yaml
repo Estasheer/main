@@ -1,119 +1,52 @@
 workflows:
   react-native-android:
-    name: React Native Android
+    name: React Native Android (Docker)
     max_build_duration: 120
     instance_type: mac_mini_m2
     environment:
       vars:
-        ANDROID_SDK_ROOT: "/Users/builder/programs/android-sdk"
+        DOCKER_IMAGE: "reactnativecommunity/react-native-android:8.0"
     scripts:
-      - name: Clean Workspace
+      - name: Prepare Workspace
         script: |
-          rm -rf ~/.gradle
-          rm -rf android/.gradle
+          # تنظيف الملفات غير الضرورية
           rm -rf android/build
           rm -rf android/app/build
           rm -rf node_modules
-
-      - name: Install Java 17
-        script: |
-          # تثبيت Java مباشرة بدون Homebrew
-          echo "Downloading Java 17..."
-          curl -L https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.8%2B7/OpenJDK17U-jdk_x64_mac_hotspot_17.0.8_7.tar.gz -o openjdk17.tar.gz
-          tar xzf openjdk17.tar.gz -C /tmp
-          rm openjdk17.tar.gz
-          export JAVA_HOME="/tmp/jdk-17.0.8+7/Contents/Home"
-          echo "JAVA_HOME=$JAVA_HOME" >> $CM_ENV
-          echo "Java home set to: $JAVA_HOME"
-          $JAVA_HOME/bin/java -version
-
-      - name: Install Node.js
-        script: |
-          echo "Downloading Node.js 18..."
-          curl -o node-v18.20.2.pkg https://nodejs.org/dist/v18.20.2/node-v18.20.2.pkg
-          sudo installer -pkg node-v18.20.2.pkg -target /
-          export PATH="/usr/local/bin:$PATH"
-          node -v
-          npm -v
-
-      - name: Install Android Tools
-        script: |
-          echo "Setting up Android SDK..."
-          mkdir -p $ANDROID_SDK_ROOT
           
-          # تنزيل أدوات سطر الأوامر
-          curl -L https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip -o cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          rm cmdline-tools.zip
-          
-          # إعداد المسارات
-          export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
-          echo "PATH=$PATH" >> $CM_ENV
-          
-          # قبول التراخيص
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-          echo "y" | sdkmanager --licenses
-          
-          # تثبيت حزم Android
-          sdkmanager "platforms;android-33" "build-tools;33.0.0" "platform-tools" "cmdline-tools;latest"
+          # إنشاء مجلدات ضرورية
+          mkdir -p android/app/src/main/assets
 
-      - name: Create Android Project
+      - name: Build with Docker
         script: |
-          if [ ! -d "android" ]; then
-            echo "Creating Android project structure..."
-            
-            npx react-native init AndroidProject --version 0.72.6
-            mv AndroidProject/android .
-            rm -rf AndroidProject
-            
-            # تحديث الإعدادات
-            echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-            echo "include ':app'" > android/settings.gradle
-          else
-            echo "Android folder exists. Updating..."
-            echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-          fi
-
-      - name: Install Dependencies
-        script: |
-          npm install --legacy-peer-deps
+          # إنشاء Dockerfile ديناميكي
+          cat > Dockerfile <<EOF
+          FROM $DOCKER_IMAGE
+          WORKDIR /app
+          COPY . .
+          RUN npm install --legacy-peer-deps
+          RUN cd android && ./gradlew clean assembleDebug
+          EOF
           
-          # إعداد gradle.properties
-          echo "org.gradle.java.home=$JAVA_HOME" > android/gradle.properties
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-
-      - name: Build APK
-        script: |
-          cd android
-          ./gradlew clean assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            -Dorg.gradle.java.home="$JAVA_HOME"
-          
-          # التحقق من وجود APK
-          if ls app/build/outputs/apk/debug/*.apk 1> /dev/null 2>&1; then
-            echo "APK built successfully!"
-          else
-            echo "APK not found!"
-            echo "Build output:"
-            ls -la app/build/outputs/apk/debug/
-            exit 1
-          fi
+          # بناء وتشغيل الحاوية
+          docker build -t react-native-build .
+          docker run --rm -v $PWD:/output react-native-build sh -c "cp /app/android/app/build/outputs/apk/debug/*.apk /output/"
 
       - name: Upload APK
         script: |
-          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          # البحث عن ملف APK
+          APK_PATH=$(find . -name "app-debug.apk" | head -1)
           
           if [ -f "$APK_PATH" ]; then
-            echo "Uploading APK: $(basename $APK_PATH)"
-            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=$(basename $APK_PATH)")
+            echo "APK built successfully! Size: $(du -h $APK_PATH | cut -f1)"
+            echo "Uploading to filebin.net..."
+            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=telon-app.apk" | grep -o 'https://filebin.net/[^"]*')
             echo "Download URL: $DOWNLOAD_URL"
           else
-            echo "APK file not found"
+            echo "APK not found after Docker build!"
+            echo "Contents:"
+            ls -la
             exit 1
           fi
     artifacts:
-      - android/app/build/outputs/apk/debug/*.apk
+      - app-debug.apk
