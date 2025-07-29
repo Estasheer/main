@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+CHANGELOG.md
+git_update.sh
+ln.sh
+run.sh
+telon-gateway-app/
