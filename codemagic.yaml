@@ -7,19 +7,22 @@ workflows:
       vars:
         DOCKER_IMAGE: "reactnativecommunity/react-native-android:8.0"
     scripts:
+      - name: Install Docker
+        script: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          brew install --cask docker
+          open -a /Applications/Docker.app --args --unattended --accept-license
+          while ! docker info &>/dev/null; do sleep 1; done
+
       - name: Prepare Workspace
         script: |
-          # تنظيف الملفات غير الضرورية
           rm -rf android/build
           rm -rf android/app/build
           rm -rf node_modules
-          
-          # إنشاء مجلدات ضرورية
           mkdir -p android/app/src/main/assets
 
       - name: Build with Docker
         script: |
-          # إنشاء Dockerfile ديناميكي
           cat > Dockerfile <<EOF
           FROM $DOCKER_IMAGE
           WORKDIR /app
@@ -28,23 +31,18 @@ workflows:
           RUN cd android && ./gradlew clean assembleDebug
           EOF
           
-          # بناء وتشغيل الحاوية
           docker build -t react-native-build .
           docker run --rm -v $PWD:/output react-native-build sh -c "cp /app/android/app/build/outputs/apk/debug/*.apk /output/"
 
       - name: Upload APK
         script: |
-          # البحث عن ملف APK
           APK_PATH=$(find . -name "app-debug.apk" | head -1)
-          
           if [ -f "$APK_PATH" ]; then
             echo "APK built successfully! Size: $(du -h $APK_PATH | cut -f1)"
-            echo "Uploading to filebin.net..."
             DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=telon-app.apk" | grep -o 'https://filebin.net/[^"]*')
             echo "Download URL: $DOWNLOAD_URL"
           else
-            echo "APK not found after Docker build!"
-            echo "Contents:"
+            echo "APK not found!"
             ls -la
             exit 1
           fi
