@@ -9,92 +9,110 @@ workflows:
     scripts:
       - name: Clean Workspace
         script: |
-          rm -rf ~/.gradle/caches
+          rm -rf ~/.gradle
           rm -rf android/.gradle
           rm -rf android/build
           rm -rf android/app/build
+          rm -rf node_modules
 
-- name: Install Required Tools
-  script: |
-    # تثبيت Java 17 بطريقة موثوقة
-    brew install --cask adoptopenjdk/openjdk/adoptopenjdk17
-    export JAVA_HOME=$(/usr/libexec/java_home -v 17)
-    echo "JAVA_HOME set to: $JAVA_HOME"
-    
-    # تثبيت Node.js 18
-    curl -o node-v18.20.2.pkg https://nodejs.org/dist/v18.20.2/node-v18.20.2.pkg
-    sudo installer -pkg node-v18.20.2.pkg -target /
-    export PATH="/usr/local/bin:$PATH"
-    
-    # تثبيت Android Command Line Tools
-    mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-    curl -L https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip -o cmdline-tools.zip
-    unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-    mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-    rm cmdline-tools.zip
-    
-    # قبول التراخيص (بدون yes)
-    echo -e "\n" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-    
-    # تثبيت Android SDK
-    $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0" "platform-tools"
+      - name: Install Java 17
+        script: |
+          # تثبيت Java مباشرة بدون Homebrew
+          echo "Downloading Java 17..."
+          curl -L https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.8%2B7/OpenJDK17U-jdk_x64_mac_hotspot_17.0.8_7.tar.gz -o openjdk17.tar.gz
+          tar xzf openjdk17.tar.gz -C /tmp
+          rm openjdk17.tar.gz
+          export JAVA_HOME="/tmp/jdk-17.0.8+7/Contents/Home"
+          echo "JAVA_HOME=$JAVA_HOME" >> $CM_ENV
+          echo "Java home set to: $JAVA_HOME"
+          $JAVA_HOME/bin/java -version
+
+      - name: Install Node.js
+        script: |
+          echo "Downloading Node.js 18..."
+          curl -o node-v18.20.2.pkg https://nodejs.org/dist/v18.20.2/node-v18.20.2.pkg
+          sudo installer -pkg node-v18.20.2.pkg -target /
+          export PATH="/usr/local/bin:$PATH"
+          node -v
+          npm -v
+
+      - name: Install Android Tools
+        script: |
+          echo "Setting up Android SDK..."
+          mkdir -p $ANDROID_SDK_ROOT
+          
+          # تنزيل أدوات سطر الأوامر
+          curl -L https://dl.google.com/android/repository/commandlinetools-mac-9477386_latest.zip -o cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          rm cmdline-tools.zip
+          
+          # إعداد المسارات
+          export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+          echo "PATH=$PATH" >> $CM_ENV
+          
+          # قبول التراخيص
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          echo "y" | sdkmanager --licenses
+          
+          # تثبيت حزم Android
+          sdkmanager "platforms;android-33" "build-tools;33.0.0" "platform-tools" "cmdline-tools;latest"
 
       - name: Create Android Project
         script: |
           if [ ! -d "android" ]; then
-            echo "Creating Android project from template..."
+            echo "Creating Android project structure..."
             
-            # إنشاء هيكل مشروع Android باستخدام npx
-            npx react-native init MyApp --template react-native-template-typescript
+            npx react-native init AndroidProject --version 0.72.6
+            mv AndroidProject/android .
+            rm -rf AndroidProject
             
-            # نسخ مجلد android من المشروع الجديد
-            cp -R MyApp/android .
-            rm -rf MyApp
-            
-            # تحديث ملفات التكوين
+            # تحديث الإعدادات
             echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
             echo "include ':app'" > android/settings.gradle
+          else
+            echo "Android folder exists. Updating..."
+            echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
           fi
 
-      - name: Install Project Dependencies
+      - name: Install Dependencies
         script: |
           npm install --legacy-peer-deps
           
-          # إعداد Android SDK
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          # إعداد gradle.properties
+          echo "org.gradle.java.home=$JAVA_HOME" > android/gradle.properties
+          echo "android.useAndroidX=true" >> android/gradle.properties
+          echo "android.enableJetifier=true" >> android/gradle.properties
 
-      - name: Build Android APK
+      - name: Build APK
         script: |
           cd android
-          
-          # استخدام Gradle مع إعدادات محددة
           ./gradlew clean assembleDebug \
             --no-daemon \
             --stacktrace \
-            -Dorg.gradle.java.home=$JAVA_HOME \
-            -Dorg.gradle.daemon=false \
-            -Dorg.gradle.parallel=true
+            -Dorg.gradle.java.home="$JAVA_HOME"
           
           # التحقق من وجود APK
-          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            echo "APK built successfully! File size: $(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+          if ls app/build/outputs/apk/debug/*.apk 1> /dev/null 2>&1; then
+            echo "APK built successfully!"
           else
-            echo "APK not found! Build may have failed."
-            echo "Build output contents:"
+            echo "APK not found!"
+            echo "Build output:"
             ls -la app/build/outputs/apk/debug/
             exit 1
           fi
 
       - name: Upload APK
         script: |
-          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
           
           if [ -f "$APK_PATH" ]; then
-            echo "Uploading APK to filebin.net..."
-            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=telon-gateway-app.apk" | grep -o 'https://filebin.net/[^"]*')
+            echo "Uploading APK: $(basename $APK_PATH)"
+            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=$(basename $APK_PATH)")
             echo "Download URL: $DOWNLOAD_URL"
           else
-            echo "APK file not found for upload"
+            echo "APK file not found"
             exit 1
           fi
     artifacts:
