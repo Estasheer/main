@@ -1,79 +1,51 @@
 workflows:
   react-native-android:
-    name: React Native Android (Native Build)
+    name: React Native Android (Docker)
     max_build_duration: 120
-    instance_type: mac_mini_m2
+    instance_type: linux_x2  # تم تغييره من mac_mini_m2 إلى linux_x2
     environment:
       vars:
-        ANDROID_HOME: $HOME/Library/Android/sdk
-        PATH: $PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+        DOCKER_IMAGE: "reactnativecommunity/react-native-android:8.0"
     scripts:
-      - name: Install Dependencies
-        script: |
-          brew install node watchman
-          mkdir -p $ANDROID_HOME
-          cd $HOME
-          curl -O https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
-          unzip commandlinetools-mac-11076708_latest.zip -d $ANDROID_HOME/cmdline-tools
-          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          rm commandlinetools-mac-11076708_latest.zip
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0"
-
       - name: Prepare Workspace
         script: |
-          PROJECT_PATH=$(find . -type d -name 'android' -path '*/node_modules/*' -prune -o -path '*/android' -print | grep -m 1 '/android$' | xargs dirname)
-          if [ -z "$PROJECT_PATH" ]; then
-            echo "Error: Android project directory not found!"
-            find . -type d -name 'android'
-            exit 1
-          fi
-          echo "Detected project path: $PROJECT_PATH"
-          cd "$PROJECT_PATH"
+          # تنظيف الملفات غير الضرورية
+          rm -rf android/build
+          rm -rf android/app/build
+          rm -rf node_modules
           
-          rm -rf android/build android/app/build node_modules
+          # إنشاء مجلدات ضرورية
           mkdir -p android/app/src/main/assets
-          npm install --legacy-peer-deps
-          
-          # تحديث ملف gradle-wrapper.properties لاستخدام مرآة
-          sed -i '' 's#https\\://services.gradle.org/distributions#https\\://mirrors.cloud.tencent.com/gradle#g' android/gradle/wrapper/gradle-wrapper.properties
-          
-          # منح الصلاحيات لملفات gradle
-          chmod +x android/gradlew
 
-      - name: Build APK
+      - name: Build with Docker
         script: |
-          PROJECT_PATH=$(find . -type d -name 'android' -path '*/node_modules/*' -prune -o -path '*/android' -print | grep -m 1 '/android$' | xargs dirname)
-          cd "$PROJECT_PATH"
+          # إنشاء Dockerfile ديناميكي
+          cat > Dockerfile <<EOF
+          FROM $DOCKER_IMAGE
+          WORKDIR /app
+          COPY . .
+          RUN npm install --legacy-peer-deps
+          RUN cd android && ./gradlew clean assembleDebug
+          EOF
           
-          echo "Building Android APK..."
-          cd android
-          ./gradlew --no-daemon clean assembleDebug
-          
-          # البحث عن ملف APK
-          APK_PATH=$(find . -name 'app-debug.apk' | head -1)
-          if [ -f "$APK_PATH" ]; then
-            echo "APK found at: $APK_PATH"
-            cp "$APK_PATH" ../../app-debug.apk
-          else
-            echo "APK not found!"
-            echo "Searching for APK files:"
-            find . -name '*.apk'
-            exit 1
-          fi
+          # بناء وتشغيل الحاوية
+          docker build -t react-native-build .
+          docker run --rm -v $PWD:/output react-native-build sh -c "cp /app/android/app/build/outputs/apk/debug/*.apk /output/"
 
       - name: Upload APK
         script: |
-          if [ -f "app-debug.apk" ]; then
-            echo "APK size: $(du -h app-debug.apk | cut -f1)"
-            DOWNLOAD_URL=$(curl -X POST -T "app-debug.apk" "https://filebin.net/?filename=telon-app.apk" | grep -o 'https://filebin.net/[^"]*')
+          # البحث عن ملف APK
+          APK_PATH=$(find . -name "app-debug.apk" | head -1)
+          
+          if [ -f "$APK_PATH" ]; then
+            echo "APK built successfully! Size: $(du -h $APK_PATH | cut -f1)"
+            echo "Uploading to filebin.net..."
+            DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=telon-app.apk" | grep -o 'https://filebin.net/[^"]*')
             echo "Download URL: $DOWNLOAD_URL"
           else
-            echo "APK not found after build!"
-            echo "Current directory content:"
+            echo "APK not found after Docker build!"
+            echo "Contents:"
             ls -la
-            echo "Searching for APK:"
-            find . -name '*.apk'
             exit 1
           fi
     artifacts:
