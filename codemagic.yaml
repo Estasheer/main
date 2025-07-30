@@ -22,14 +22,12 @@ workflows:
 
       - name: Prepare Workspace
         script: |
-          # تحديد المسار الصحيح للمشروع الرئيسي
           PROJECT_PATH=$(find . -type d -name 'android' -path '*/node_modules/*' -prune -o -path '*/android' -print | grep -m 1 '/android$' | xargs dirname)
           if [ -z "$PROJECT_PATH" ]; then
             echo "Error: Android project directory not found!"
             find . -type d -name 'android'
             exit 1
           fi
-          
           echo "Detected project path: $PROJECT_PATH"
           cd "$PROJECT_PATH"
           
@@ -37,40 +35,30 @@ workflows:
           mkdir -p android/app/src/main/assets
           npm install --legacy-peer-deps
           
-          echo "Project structure after preparation:"
-          ls -la
-          echo "Android directory content:"
-          ls -la android
+          # تحديث ملف gradle-wrapper.properties لاستخدام مرآة
+          sed -i '' 's#https\\://services.gradle.org/distributions#https\\://mirrors.cloud.tencent.com/gradle#g' android/gradle/wrapper/gradle-wrapper.properties
+          
+          # منح الصلاحيات لملفات gradle
+          chmod +x android/gradlew
 
       - name: Build APK
         script: |
-          # تحديد المسار الصحيح للمشروع الرئيسي
           PROJECT_PATH=$(find . -type d -name 'android' -path '*/node_modules/*' -prune -o -path '*/android' -print | grep -m 1 '/android$' | xargs dirname)
           cd "$PROJECT_PATH"
           
-          if [ -f "android/gradlew" ]; then
-            echo "Building from android directory"
-            cd android
-            chmod +x gradlew
-            ./gradlew clean assembleDebug
-            APK_PATH=app/build/outputs/apk/debug/app-debug.apk
-          elif [ -f "gradlew" ]; then
-            echo "Building from root directory"
-            chmod +x gradlew
-            ./gradlew clean assembleDebug -p android
-            APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-          else
-            echo "Error: gradlew not found in project!"
-            find . -name gradlew
-            exit 1
-          fi
+          echo "Building Android APK..."
+          cd android
+          ./gradlew --no-daemon clean assembleDebug
           
-          # نسخ APK إلى المجلد الرئيسي للعملية
+          # البحث عن ملف APK
+          APK_PATH=$(find . -name 'app-debug.apk' | head -1)
           if [ -f "$APK_PATH" ]; then
+            echo "APK found at: $APK_PATH"
             cp "$APK_PATH" ../../app-debug.apk
           else
-            echo "APK not found at: $APK_PATH"
-            find "$(pwd)" -name '*.apk'
+            echo "APK not found!"
+            echo "Searching for APK files:"
+            find . -name '*.apk'
             exit 1
           fi
 
