@@ -1,29 +1,25 @@
 workflows:
   react-native-android:
-    name: React Native Android (Docker)
+    name: React Native Android (No Docker)
     max_build_duration: 120
-    instance_type: linux_x2  # متاح بعد تمكين الفوترة
+    instance_type: mac_mini_m2  # متاح في الخطة المجانية
     environment:
       vars:
-        DOCKER_IMAGE: "reactnativecommunity/react-native-android:8.0"
+        ANDROID_SDK_ROOT: "/Users/builder/Library/Android/sdk"
+      groups:
+        - android
     scripts:
-      - name: Prepare Workspace
+      - name: Install Node.js and Dependencies
         script: |
-          rm -rf android/build
-          rm -rf android/app/build
-          rm -rf node_modules
-          mkdir -p android/app/src/main/assets
-      - name: Build with Docker
+          brew install node
+          npm install --legacy-peer-deps
+      - name: Install Android Tools
         script: |
-          cat > Dockerfile <<EOF
-          FROM $DOCKER_IMAGE
-          WORKDIR /app
-          COPY . .
-          RUN npm install --legacy-peer-deps
-          RUN cd android && ./gradlew clean assembleDebug
-          EOF
-          docker build -t react-native-build .
-          docker run --rm -v $PWD:/output react-native-build sh -c "cp /app/android/app/build/outputs/apk/debug/*.apk /output/"
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+      - name: Build Android APK
+        script: |
+          cd android
+          ./gradlew clean assembleDebug
       - name: Upload APK
         script: |
           APK_PATH=$(find . -name "app-debug.apk" | head -1)
@@ -33,7 +29,7 @@ workflows:
             DOWNLOAD_URL=$(curl -X POST -T "$APK_PATH" "https://filebin.net/?filename=telon-app.apk" | grep -o 'https://filebin.net/[^"]*')
             echo "Download URL: $DOWNLOAD_URL"
           else
-            echo "APK not found after Docker build!"
+            echo "APK not found!"
             echo "Contents:"
             ls -la
             exit 1
