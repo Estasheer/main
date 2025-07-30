@@ -2,21 +2,35 @@ workflows:
   react-native-android:
     name: React Native Android (No Docker)
     max_build_duration: 120
-    instance_type: mac_mini_m2  # متاح في الخطة المجانية
+    instance_type: mac_mini_m2
     environment:
       vars:
         ANDROID_SDK_ROOT: "/Users/builder/Library/Android/sdk"
       groups:
         - android
     scripts:
+      - name: Set JAVA_HOME
+        script: |
+          # تحديد إصدار Java 11 (Zulu JDK)
+          export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-11.jdk/Contents/Home
+          export PATH=$JAVA_HOME/bin:$PATH
+      - name: Verify Java
+        script: |
+          # التحقق من إصدار Java
+          java -version
+      - name: Install Android Tools
+        script: |
+          # إعداد PATH لـ Android SDK
+          export PATH=$PATH:$ANDROID_SDK_ROOT/tools/bin
+          # التحقق من وجود sdkmanager
+          which sdkmanager
+          $ANDROID_SDK_ROOT/tools/bin/sdkmanager --version
+          # تثبيت مكونات Android SDK
+          $ANDROID_SDK_ROOT/tools/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
       - name: Install Node.js and Dependencies
         script: |
           brew install node
           npm install --legacy-peer-deps
-- name: Install Android Tools
-  script: |
-    export PATH=$PATH:$ANDROID_SDK_ROOT/tools/bin
-    sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
       - name: Build Android APK
         script: |
           cd android
