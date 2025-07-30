@@ -39,19 +39,37 @@ workflows:
           
           # تثبيت dependencies
           npm install --legacy-peer-deps
+          
+          # التحقق من هيكل المشروع
+          echo "Project structure:"
+          ls -la
+          echo "Android directory content:"
+          ls -la android
 
       - name: Build APK
         script: |
-          cd android
-          ./gradlew clean assembleDebug
+          # البحث عن ملف gradlew
+          if [ -f "android/gradlew" ]; then
+            echo "Building from android directory"
+            cd android
+            ./gradlew clean assembleDebug
+            APK_PATH=app/build/outputs/apk/debug/app-debug.apk
+          elif [ -f "gradlew" ]; then
+            echo "Building from root directory"
+            ./gradlew clean assembleDebug -p android
+            APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
+          else
+            echo "Error: gradlew not found!"
+            find . -name gradlew
+            exit 1
+          fi
           
           # نسخ APK إلى المجلد الرئيسي
-          APK_PATH=app/build/outputs/apk/debug/app-debug.apk
           if [ -f "$APK_PATH" ]; then
-            cp $APK_PATH ../
+            cp $APK_PATH ./app-debug.apk
           else
-            echo "APK not found!"
-            ls -la app/build/outputs/apk/debug/
+            echo "APK not found at: $APK_PATH"
+            find . -name *.apk
             exit 1
           fi
 
@@ -63,7 +81,10 @@ workflows:
             echo "Download URL: $DOWNLOAD_URL"
           else
             echo "APK not found after build!"
+            echo "Current directory content:"
             ls -la
+            echo "Android build output:"
+            find . -name *.apk
             exit 1
           fi
     artifacts:
