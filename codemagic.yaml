@@ -9,24 +9,21 @@ workflows:
       groups:
         - android
     scripts:
-      - name: Set JAVA_HOME to Java 8
+      - name: Check Android SDK
         script: |
-          export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
-          export PATH=$JAVA_HOME/bin:$PATH
-          echo "JAVA_HOME is now $JAVA_HOME"
-      - name: Verify Java
-        script: |
-          java -version
-      - name: Install Android Tools
-        script: |
-          export PATH=$PATH:$ANDROID_SDK_ROOT/tools/bin
-          which sdkmanager
-          $ANDROID_SDK_ROOT/tools/bin/sdkmanager --version
-          $ANDROID_SDK_ROOT/tools/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+          echo "Checking Android SDK contents..."
+          ls -la $ANDROID_SDK_ROOT
+          ls -la $ANDROID_SDK_ROOT/cmdline-tools
       - name: Install Node.js and Dependencies
         script: |
           brew install node
           npm install --legacy-peer-deps
+      - name: Install Android Tools
+        script: |
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses
+          sdkmanager --version
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
       - name: Build Android APK
         script: |
           cd android
