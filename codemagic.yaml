@@ -6,17 +6,28 @@ workflows:
     environment:
       vars:
         ANDROID_HOME: $HOME/Library/Android/sdk
-        PATH: $PATH:$ANDROID_HOME/platform-tools
+        PATH: $PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
     scripts:
       - name: Install Dependencies
         script: |
           # تثبيت المتطلبات الأساسية
           brew install node watchman
           
-          # إعداد Android SDK
+          # إنشاء مجلد Android SDK
           mkdir -p $ANDROID_HOME
-          yes | sdkmanager --install "platforms;android-33" "build-tools;33.0.0"
-          sdkmanager --licenses
+          
+          # تنزيل وتثبيت Android Command Line Tools
+          cd $HOME
+          curl -O https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
+          unzip commandlinetools-mac-11076708_latest.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          rm commandlinetools-mac-11076708_latest.zip
+          
+          # قبول التراخيص
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          
+          # تثبيت Android SDK و Build Tools
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0"
 
       - name: Prepare Workspace
         script: |
@@ -24,8 +35,6 @@ workflows:
           rm -rf android/build
           rm -rf android/app/build
           rm -rf node_modules
-          
-          # إنشاء مجلدات ضرورية
           mkdir -p android/app/src/main/assets
           
           # تثبيت dependencies
@@ -33,11 +42,10 @@ workflows:
 
       - name: Build APK
         script: |
-          # بناء APK
           cd android
           ./gradlew clean assembleDebug
           
-          # التحقق من وجود APK
+          # نسخ APK إلى المجلد الرئيسي
           APK_PATH=app/build/outputs/apk/debug/app-debug.apk
           if [ -f "$APK_PATH" ]; then
             cp $APK_PATH ../
@@ -49,7 +57,6 @@ workflows:
 
       - name: Upload APK
         script: |
-          # رفع APK
           if [ -f "app-debug.apk" ]; then
             echo "APK size: $(du -h app-debug.apk | cut -f1)"
             DOWNLOAD_URL=$(curl -X POST -T "app-debug.apk" "https://filebin.net/?filename=telon-app.apk" | grep -o 'https://filebin.net/[^"]*')
