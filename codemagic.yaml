@@ -9,23 +9,19 @@ workflows:
       groups:
         - android
     scripts:
-      - name: Set JAVA_HOME
+      - name: Set JAVA_HOME to Java 8
         script: |
-          # تحديد إصدار Java 11 (Zulu JDK)
-          export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-11.jdk/Contents/Home
+          export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
           export PATH=$JAVA_HOME/bin:$PATH
+          echo "JAVA_HOME is now $JAVA_HOME"
       - name: Verify Java
         script: |
-          # التحقق من إصدار Java
           java -version
       - name: Install Android Tools
         script: |
-          # إعداد PATH لـ Android SDK
           export PATH=$PATH:$ANDROID_SDK_ROOT/tools/bin
-          # التحقق من وجود sdkmanager
           which sdkmanager
           $ANDROID_SDK_ROOT/tools/bin/sdkmanager --version
-          # تثبيت مكونات Android SDK
           $ANDROID_SDK_ROOT/tools/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
       - name: Install Node.js and Dependencies
         script: |
