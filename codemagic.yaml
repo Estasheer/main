@@ -10,66 +10,67 @@ workflows:
     scripts:
       - name: Install Dependencies
         script: |
-          # تثبيت المتطلبات الأساسية
           brew install node watchman
-          
-          # إنشاء مجلد Android SDK
           mkdir -p $ANDROID_HOME
-          
-          # تنزيل وتثبيت Android Command Line Tools
           cd $HOME
           curl -O https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
           unzip commandlinetools-mac-11076708_latest.zip -d $ANDROID_HOME/cmdline-tools
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
           rm commandlinetools-mac-11076708_latest.zip
-          
-          # قبول التراخيص
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          
-          # تثبيت Android SDK و Build Tools
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0"
 
       - name: Prepare Workspace
         script: |
-          # تنظيف الملفات السابقة
-          rm -rf android/build
-          rm -rf android/app/build
-          rm -rf node_modules
-          mkdir -p android/app/src/main/assets
+          # تحديد المسار الصحيح للمشروع الرئيسي
+          PROJECT_PATH=$(find . -type d -name 'android' -path '*/node_modules/*' -prune -o -path '*/android' -print | grep -m 1 '/android$' | xargs dirname)
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "Error: Android project directory not found!"
+            find . -type d -name 'android'
+            exit 1
+          fi
           
-          # تثبيت dependencies
+          echo "Detected project path: $PROJECT_PATH"
+          cd "$PROJECT_PATH"
+          
+          rm -rf android/build android/app/build node_modules
+          mkdir -p android/app/src/main/assets
           npm install --legacy-peer-deps
           
-          # التحقق من هيكل المشروع
-          echo "Project structure:"
+          echo "Project structure after preparation:"
           ls -la
           echo "Android directory content:"
           ls -la android
 
       - name: Build APK
         script: |
-          # البحث عن ملف gradlew
+          # تحديد المسار الصحيح للمشروع الرئيسي
+          PROJECT_PATH=$(find . -type d -name 'android' -path '*/node_modules/*' -prune -o -path '*/android' -print | grep -m 1 '/android$' | xargs dirname)
+          cd "$PROJECT_PATH"
+          
           if [ -f "android/gradlew" ]; then
             echo "Building from android directory"
             cd android
+            chmod +x gradlew
             ./gradlew clean assembleDebug
             APK_PATH=app/build/outputs/apk/debug/app-debug.apk
           elif [ -f "gradlew" ]; then
             echo "Building from root directory"
+            chmod +x gradlew
             ./gradlew clean assembleDebug -p android
             APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
           else
-            echo "Error: gradlew not found!"
+            echo "Error: gradlew not found in project!"
             find . -name gradlew
             exit 1
           fi
           
-          # نسخ APK إلى المجلد الرئيسي
+          # نسخ APK إلى المجلد الرئيسي للعملية
           if [ -f "$APK_PATH" ]; then
-            cp $APK_PATH ./app-debug.apk
+            cp "$APK_PATH" ../../app-debug.apk
           else
             echo "APK not found at: $APK_PATH"
-            find . -name *.apk
+            find "$(pwd)" -name '*.apk'
             exit 1
           fi
 
@@ -83,8 +84,8 @@ workflows:
             echo "APK not found after build!"
             echo "Current directory content:"
             ls -la
-            echo "Android build output:"
-            find . -name *.apk
+            echo "Searching for APK:"
+            find . -name '*.apk'
             exit 1
           fi
     artifacts:
