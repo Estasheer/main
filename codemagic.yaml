@@ -13,9 +13,10 @@ workflows:
         script: |
           brew install node
           npm install --legacy-peer-deps
-      - name: Install Android Tools
-        script: |
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+- name: Install Android Tools
+  script: |
+    export PATH=$PATH:$ANDROID_SDK_ROOT/tools/bin
+    sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
       - name: Build Android APK
         script: |
           cd android
