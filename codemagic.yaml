@@ -24,6 +24,17 @@ workflows:
           yes | sdkmanager --licenses
           sdkmanager --version
           sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+      - name: Verify project structure
+        script: |
+          echo "Current working directory:"
+          pwd
+          echo "Contents of working directory:"
+          ls -la
+          if [ -d "android" ]; then
+            echo "android directory exists"
+          else
+            echo "android directory does not exist"
+          fi
       - name: Build Android APK
         script: |
           cd android
